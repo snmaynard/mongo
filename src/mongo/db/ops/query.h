@@ -181,6 +181,7 @@ namespace mongo {
     };
     
     class ScanAndOrder;
+    class QueryResponseBuilder;
     
     /** Build strategy for a cursor returning out of order results. */
     class ReorderBuildStrategy : public ResponseBuildStrategy {
@@ -188,14 +189,15 @@ namespace mongo {
         ReorderBuildStrategy( const ParsedQuery &parsedQuery,
                              const shared_ptr<Cursor> &cursor,
                              BufBuilder &buf,
-                             const QueryPlanSummary &queryPlan );
+                             const QueryPlanSummary &queryPlan,
+                             QueryResponseBuilder *queryResponseBuilder );
         virtual bool handleMatch( bool &orderedMatch );
         /** Handle a match without performing deduping. */
         void _handleMatchNoDedup();
         virtual int rewriteMatches();
         virtual int bufferedMatches() const { return _bufferedMatches; }
     private:
-        ScanAndOrder *newScanAndOrder( const QueryPlanSummary &queryPlan ) const;
+        ScanAndOrder *newScanAndOrder( const QueryPlanSummary &queryPlan, QueryResponseBuilder *queryResponseBuilder ) const;
         shared_ptr<ScanAndOrder> _scanAndOrder;
         int _bufferedMatches;
     };
@@ -265,20 +267,22 @@ namespace mongo {
         int handoff( Message &result );
         /** A chunk manager found at the beginning of the query. */
         ShardChunkManagerPtr chunkManager() const { return _chunkManager; }
+        
+        bool currentMatches();
+        bool chunkMatches();
     private:
         ShardChunkManagerPtr newChunkManager() const;
         shared_ptr<ExplainRecordingStrategy> newExplainRecordingStrategy
         ( const QueryPlanSummary &queryPlan, const BSONObj &oldPlan ) const;
         shared_ptr<ResponseBuildStrategy> newResponseBuildStrategy
         ( const QueryPlanSummary &queryPlan );
-        bool currentMatches();
-        bool chunkMatches();
         const ParsedQuery &_parsedQuery;
         shared_ptr<Cursor> _cursor;
         shared_ptr<QueryOptimizerCursor> _queryOptimizerCursor;
         BufBuilder _buf;
         ShardChunkManagerPtr _chunkManager;
         shared_ptr<ExplainRecordingStrategy> _explain;
+        bool _shouldCheckForMatches;
         shared_ptr<ResponseBuildStrategy> _builder;
     };
 

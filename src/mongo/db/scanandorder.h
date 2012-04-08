@@ -23,6 +23,7 @@
 #include "indexkey.h"
 #include "queryutil.h"
 #include "projection.h"
+#include "ops/query.h"
 
 namespace mongo {
 
@@ -79,7 +80,16 @@ namespace mongo {
 
         ScanAndOrder(int startFrom, int limit, const BSONObj &order, const FieldRangeSet &frs) :
             _best( BSONObjCmp( order ) ),
-            _startFrom(startFrom), _order(order, frs) {
+            _startFrom(startFrom), _order(order, frs),
+            _queryResponseBuilder(NULL) {
+            _limit = limit > 0 ? limit + _startFrom : 0x7fffffff;
+            _approxSize = 0;
+        }
+        
+        ScanAndOrder(int startFrom, int limit, const BSONObj &order, const FieldRangeSet &frs, QueryResponseBuilder *queryResponseBuilder) :
+            _best( BSONObjCmp( order ) ),
+            _startFrom(startFrom), _order(order, frs),
+            _queryResponseBuilder(queryResponseBuilder) {
             _limit = limit > 0 ? limit + _startFrom : 0x7fffffff;
             _approxSize = 0;
         }
@@ -118,6 +128,7 @@ namespace mongo {
         int _limit;   // max to send back.
         KeyType _order;
         unsigned _approxSize;
+        QueryResponseBuilder *_queryResponseBuilder;
 
     };
 

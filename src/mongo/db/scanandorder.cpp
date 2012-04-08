@@ -73,6 +73,12 @@ namespace mongo {
 
     void ScanAndOrder::_add(const BSONObj& k, const BSONObj& o, const DiskLoc* loc) {
         BSONObj docToReturn = o;
+        LOG(1) << "ScanAndOrder::_add:No order check required" << endl;
+        if(_queryResponseBuilder != NULL && (!_queryResponseBuilder->currentMatches() || !_queryResponseBuilder->chunkMatches())) {
+            LOG(1) << "ScanAndOrder::_add:No match" << endl;
+            return;
+        }
+        LOG(1) << "ScanAndOrder::_add: Match!" << endl;
         if ( loc ) {
             BSONObjBuilder b;
             b.appendElements(o);
@@ -92,6 +98,8 @@ namespace mongo {
             _validateAndUpdateApproxSize( -i->first.objsize() + -i->second.objsize() );
             _best.erase(i);
             _add(k, o, loc);
+        } else {
+            LOG(1) << "ScanAndOrder::_addIfBetter: Wouldn't fit in order" << endl;
         }
     }
 

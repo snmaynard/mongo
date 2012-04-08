@@ -361,9 +361,10 @@ namespace mongo {
     ReorderBuildStrategy::ReorderBuildStrategy( const ParsedQuery &parsedQuery,
                                                const shared_ptr<Cursor> &cursor,
                                                BufBuilder &buf,
-                                               const QueryPlanSummary &queryPlan ) :
+                                               const QueryPlanSummary &queryPlan,
+                                               QueryResponseBuilder *queryResponseBuilder ) :
     ResponseBuildStrategy( parsedQuery, cursor, buf, queryPlan ),
-    _scanAndOrder( newScanAndOrder( queryPlan ) ),
+    _scanAndOrder( newScanAndOrder( queryPlan, queryResponseBuilder ) ),
     _bufferedMatches() {
     }
 
@@ -390,7 +391,7 @@ namespace mongo {
     }
     
     ScanAndOrder *
-    ReorderBuildStrategy::newScanAndOrder( const QueryPlanSummary &queryPlan ) const {
+    ReorderBuildStrategy::newScanAndOrder( const QueryPlanSummary &queryPlan, QueryResponseBuilder *queryResponseBuilder ) const {
         verify( !_parsedQuery.getOrder().isEmpty() );
         verify( _cursor->ok() );
         const FieldRangeSet *fieldRangeSet = 0;
@@ -405,7 +406,8 @@ namespace mongo {
         return new ScanAndOrder( _parsedQuery.getSkip(),
                                 _parsedQuery.getNumToReturn(),
                                 _parsedQuery.getOrder(),
-                                *fieldRangeSet );
+                                *fieldRangeSet,
+                                queryResponseBuilder );
     }
     
     HybridBuildStrategy::HybridBuildStrategy( const ParsedQuery &parsedQuery,
@@ -413,7 +415,7 @@ namespace mongo {
                                              BufBuilder &buf ) :
     ResponseBuildStrategy( parsedQuery, cursor, buf, QueryPlanSummary() ),
     _orderedBuild( _parsedQuery, _cursor, _buf, QueryPlanSummary() ),
-    _reorderBuild( _parsedQuery, _cursor, _buf, QueryPlanSummary() ),
+    _reorderBuild( _parsedQuery, _cursor, _buf, QueryPlanSummary(), NULL ),
     _reorderedMatches() {
     }
     
@@ -477,15 +479,13 @@ namespace mongo {
     _buf( 32768 ), // TODO be smarter here
     _chunkManager( newChunkManager() ),
     _explain( newExplainRecordingStrategy( queryPlan, oldPlan ) ),
+    _shouldCheckForMatches(true),
     _builder( newResponseBuildStrategy( queryPlan ) ) {
         _builder->resetBuf();
     }
 
     bool QueryResponseBuilder::addMatch() {
-        if ( !currentMatches() ) {
-            return false;
-        }
-        if ( !chunkMatches() ) {
+        if(_shouldCheckForMatches && (!currentMatches() || !chunkMatches())) {
             return false;
         }
         bool orderedMatch = false;
@@ -579,8 +579,9 @@ namespace mongo {
         }
         if ( singlePlan ||
             !queryOptimizerPlans.mayRunInOrderPlan() ) {
+            _shouldCheckForMatches = false;
             return shared_ptr<ResponseBuildStrategy>
-            ( new ReorderBuildStrategy( _parsedQuery, _cursor, _buf, queryPlan ) );
+            ( new ReorderBuildStrategy( _parsedQuery, _cursor, _buf, queryPlan, this ) );
         }
         return shared_ptr<ResponseBuildStrategy>
         ( new HybridBuildStrategy( _parsedQuery, _queryOptimizerCursor, _buf ) );
